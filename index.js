@@ -33,7 +33,7 @@ const OTP = mongoose.model("OTP", otpSchema);
 
 const User = mongoose.model("User", UserSchema);
 
-app.get("/",async(req,res)=>{
+app.get("/api",async(req,res)=>{
     return res.status(200).json({ message: "API server" });
 })
 
