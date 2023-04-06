@@ -3,12 +3,14 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 const dotenv = require("dotenv");
 const nodemailer = require("nodemailer");
+const cors = require("cors");
 
 dotenv.config();
 
 const app = express();
 
 app.use(express.json());
+app.use(cors());
 
 mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
@@ -33,9 +35,9 @@ const OTP = mongoose.model("OTP", otpSchema);
 
 const User = mongoose.model("User", UserSchema);
 
-app.get("/api",async(req,res)=>{
-    return res.status(200).json({ message: "API server" });
-})
+app.get("/", async (req, res) => {
+  return res.status(200).json({ message: "Dashboard API server" });
+});
 
 app.post("/api/register", async (req, res) => {
   const { username, email, password } = req.body;
@@ -63,13 +65,17 @@ app.post("/api/login", async (req, res) => {
   // Find the user by username
   const user = await User.findOne({ username });
   if (!user) {
-    return res.status(401).send("Invalid username or password");
+    return res
+      .status(401)
+      .json({ message: "Invalid username or password", status: false });
   }
   const email = user.email;
   // Verify the password
   const isValidPassword = await bcrypt.compare(password, user.password);
   if (!isValidPassword) {
-    return res.status(401).send("Invalid username or password");
+    return res
+      .status(401)
+      .json({ message: "Invalid username or password", status: false });
   }
 
   // Generate a 6-digit OTP
@@ -105,71 +111,31 @@ app.post("/api/login", async (req, res) => {
   transporter.sendMail(mailOptions, (error, info) => {
     if (error) {
       console.error(error);
-      return res.status(500).json({ message: "Error sending in email" });
+      return res
+        .status(500)
+        .json({ message: "Error sending in email", status: false });
     } else {
       console.log("Email sent: " + info.response);
       return res
         .status(200)
-        .json({ message: "Please verify the OTP", id: user._id });
+        .json({ message: "Please verify the OTP", status: true });
     }
   });
 });
 
 app.post("/api/verify-otp", async (req, res) => {
-  const { otp, id } = req.body;
+  const { otp } = req.body;
 
   // Verify the OTP from the database
   const otpData = await OTP.findOne({ otp });
   if (!otpData) {
-    return res.status(401).json({ message: "Invalid OTP" });
+    return res.status(401).json({ message: "Invalid OTP", status: false });
   }
 
   // Delete the OTP from the database
   await otpData.deleteOne();
 
-  return res.status(200).json({ message: "OTP verified", verify: true });
-});
-
-app.post("/api/form-data", async (req, res) => {
-  const { name, email, number, message } = req.body;
-
-  // Send the OTP to the user's email
-  const transporter = nodemailer.createTransport({
-    host: "smtp-mail.outlook.com",
-    port: 587,
-    secureConnection: false,
-    auth: {
-      user: process.env.EMAIL_ADDRESS,
-      pass: process.env.EMAIL_PASSWORD,
-    },
-    tls: {
-      ciphers: "SSLv3",
-    },
-  });
-
-  const mailOptions = {
-    from: process.env.EMAIL_ADDRESS,
-    to: email,
-    subject: "karthi interior design",
-    text: `
-      <span>Name:<i><b>${name}</b></i></span><br />
-      <span>E-mail:<i><b>${email}</b></i></span><br />
-      <span>Number:<i><b>${number}</b></i></span><br />
-      <span>Message:<i><b>${message}</b></i></span><br />
-      `,
-  };
-
-  transporter.sendMail(mailOptions, (error, info) => {
-    if (error) {
-      console.error(error);
-      return res.status(500).json({ message: "Error sending in email" });
-    } else {
-      console.log("Email sent: " + info.response);
-      return res
-        .status(200)
-        .json({ message: "Form data submitted successfully" });
-    }
-  });
+  return res.status(200).json({ message: "OTP verified", status: true });
 });
 
 app.listen(3000, () => {
