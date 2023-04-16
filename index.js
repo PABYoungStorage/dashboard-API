@@ -29,11 +29,23 @@ const otpSchema = new mongoose.Schema({
   otp: { type: String, required: true },
   createdAt: { type: Date, default: Date.now, expires: 600 }, // OTP will expire after 10 minutes
 });
+const cardSchema = new mongoose.Schema({
+  id: { type: String, required: true },
+  title: { type: String, required: true },
+  description: { type: String, required: true }, // or String, depending on the actual data type
+});
+
+const BoardSchema = new mongoose.Schema({
+  title: { type: String, require: true },
+  cards: { type: [cardSchema], default: [] },
+});
 
 // Create OTP model
-const OTP = mongoose.model("OTP", otpSchema);
+const OTP = mongoose.model("otp", otpSchema);
 
-const User = mongoose.model("User", UserSchema);
+const User = mongoose.model("user", UserSchema);
+
+const Board = mongoose.model("board", BoardSchema);
 
 app.get("/", async (req, res) => {
   return res.status(200).json({ message: "Dashboard API server" });
@@ -136,6 +148,80 @@ app.post("/api/verify-otp", async (req, res) => {
   await otpData.deleteOne();
 
   return res.status(200).json({ message: "OTP verified", status: true });
+});
+
+app.get("/api/users", async (req, res) => {
+  const user = await User.find();
+  return res.status(200).json({ message: user, status: "true" });
+});
+
+app.get("/api/boards", async (req, res) => {
+  const user = await Board.find();
+  return res.status(200).json({ message: user, status: "true" });
+});
+
+// add a card to the backlog array
+app.post("/api/boards/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const backlog = await Board.findOne({ id: parseInt(id) });
+    const card = req.body;
+    backlog.cards.push(card);
+    await backlog.save();
+    res.status(200).json({ message: "board added", status: true });
+  } catch (error) {
+    console.log(error);
+    res.status(500).send("Error adding card");
+  }
+});
+
+// delete a card from the backlog array
+app.delete("/api/boards/:id/cards/:cardId", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const cardId = req.params.cardId;
+    const backlog = await Board.findOne({ id: parseInt(id) });
+    const cardIndex = backlog.cards.findIndex((card) => card.id == cardId);
+    if (cardIndex === -1) {
+      res.status(404).send("Card not found in backlog");
+      return;
+    }
+    backlog.cards.splice(cardIndex, 1);
+    await backlog.save();
+    res.status(200).json({ message: "card deleted", status: true });
+  } catch (error) {
+    console.log(error);
+    res.status(500).send("Error deleting card");
+  }
+});
+
+// Move a card from one card array to another
+app.post("/api/boards/:id/move/:moveid", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const moveid = req.params.moveid;
+    const backlog = await Board.findOne({ id: parseInt(id) });
+    const cardbody = req.body;
+    if (!backlog) {
+      return res.status(404).send("Backlog not found");
+    }
+    const cardIndex = backlog.cards.findIndex((card) => card.id == cardbody.id);
+    if (cardIndex === -1) {
+      res.status(404).send("Card not found in backlog");
+      return;
+    }
+    backlog.cards.splice(cardIndex, 1);
+    await backlog.save();
+    const movelog = await Board.findOne({ id: parseInt(moveid) });
+    movelog.cards.push(cardbody);
+    await movelog.save();
+    res
+      .status(200)
+      .json({ message: "shift successfully happens", status: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server Error");
+  }
 });
 
 app.listen(3000, () => {
